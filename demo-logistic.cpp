@@ -323,7 +323,7 @@ void RunLogReg(const string &SNPDir, const string &SNPFileName, const string &pV
 	for (size_t i=0; i < sData.size(); i++){
 
 		for(size_t s = 0; s < sizeS; s++)
-			sDataArray[s][i] = std::vector<std::complex<double>>(sData[i].size());
+			sDataArray[s][i] = std::vector<std::complex<double>>(m/4);
 
 		size_t counter = 0;
 
