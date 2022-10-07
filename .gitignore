@@ -1,0 +1,14 @@
+# Ignore everything in this directory
+*~
+*.o
+*.o.d
+*.gcov
+bin/
+build*/
+.cproject
+.metadata/
+.project
+.settings/
+
+# Except this file
+!.gitignore
