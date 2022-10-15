@@ -304,9 +304,9 @@ void RunLogReg(const string &SNPDir, const string &SNPFileName, const string &pV
 	vector<Plaintext> XT(numCt);
 	vector<Plaintext> Y(numCt);
 	for (size_t r = 0; r < numCt; r++) {
-		X[r] = cc->MakeCKKSPackedPlaintext(x[r]);
-		XT[r] = cc->MakeCKKSPackedPlaintext(xt[r]);
-		Y[r] = cc->MakeCKKSPackedPlaintext(y[r]);
+		X[r] = cc->MakeCKKSPackedPlaintext(x[r],1,0,nullptr,m/4);
+		XT[r] = cc->MakeCKKSPackedPlaintext(xt[r],1,0,nullptr,m/4);
+		Y[r] = cc->MakeCKKSPackedPlaintext(y[r],1,0,nullptr,m/4);
 	}
 
 	std::vector<vector<Ciphertext<DCRTPoly>>> cX1(N);
@@ -341,13 +341,13 @@ void RunLogReg(const string &SNPDir, const string &SNPFileName, const string &pV
 #pragma omp parallel for
 	for (size_t i=0; i<N; i++){
 		for (size_t s=0; s < sizeS; s++){
-			Plaintext sTemp = cc->MakeCKKSPackedPlaintext(sDataArray[s][i],1,10,pubElementsS[0].GetParams());
+			Plaintext sTemp = cc->MakeCKKSPackedPlaintext(sDataArray[s][i],1,10,pubElementsS[0].GetParams(),m/4);
 			S[s][i] = cc->Encrypt(pubKeyS, sTemp);
 		}
 		std::vector<Ciphertext<DCRTPoly>> x1Temp;
 		for (size_t j=0; j<k; j++){
 			std::vector<std::complex<double>> xVector(m/4,xData[i][j]);
-			Plaintext xTemp = cc->MakeCKKSPackedPlaintext(xVector,1,11,pubElementsX[0].GetParams());
+			Plaintext xTemp = cc->MakeCKKSPackedPlaintext(xVector,1,11,pubElementsX[0].GetParams(),m/4);
 			x1Temp.push_back(cc->Encrypt(pubKeyX, xTemp));
 		}
 		cX1[i] = x1Temp;
@@ -523,7 +523,7 @@ void RunLogReg(const string &SNPDir, const string &SNPFileName, const string &pV
 			else
 				mask[i] = 0;
 		}
-		Plaintext plaintextMask = cc->MakeCKKSPackedPlaintext(mask,1);
+		Plaintext plaintextMask = cc->MakeCKKSPackedPlaintext(mask,1,0,nullptr,m/4);
 		auto cMask = cc->EvalMult(cztr6,plaintextMask);
 		cztr4 = cc->EvalAdd(cMask,cc->GetScheme()->EvalAtIndex(cMask,m/4-4,*rotKeysConv));
 		cztr3Arr[r] = cc->EvalAdd(cztr4,cc->GetScheme()->EvalAtIndex(cztr4,m/4-8,*rotKeysConv));
@@ -570,7 +570,7 @@ void RunLogReg(const string &SNPDir, const string &SNPFileName, const string &pV
 			maskW[v] = 1;
 		for (size_t v = NPow2cur*k*k; v < m/4; v++)
 			maskW[v] = 0;
-		Plaintext plaintextW = cc->MakeCKKSPackedPlaintext(maskW,1);
+		Plaintext plaintextW = cc->MakeCKKSPackedPlaintext(maskW,1,0,nullptr,m/4);
 		auto cWConv = cc->EvalMult(cWArr[r],plaintextW);
 
 		for (size_t j = NPow2cur*k*k; j < m/4; j=j*2 ) {
@@ -778,7 +778,7 @@ void RunLogReg(const string &SNPDir, const string &SNPFileName, const string &pV
 			maskW2[v] = scalingFactorN;
 		for (size_t v = NPow2cur*k*k; v < m/4; v++)
 			maskW2[v] = 0;
-		Plaintext plaintextW2 = cc->MakeCKKSPackedPlaintext(maskW2,1);
+		Plaintext plaintextW2 = cc->MakeCKKSPackedPlaintext(maskW2,1,0,nullptr,m/4);
 		auto cWConv2 = cc->EvalMult(cWArr[r],plaintextW2);
 
 		cWConv2 = cc->ModReduce(cWConv2);//Level 13
@@ -1053,7 +1053,7 @@ shared_ptr<std::vector<std::vector<Ciphertext<DCRTPoly>>>>  MatrixInverse(const 
 			mask[i] = 0;
 	}
 
-	Plaintext plaintext = cc->MakeCKKSPackedPlaintext(mask,1);
+	Plaintext plaintext = cc->MakeCKKSPackedPlaintext(mask,1,0,nullptr,m/4);
 
 	std::vector<Ciphertext<DCRTPoly>> cMRotations(k*k-1);
 
@@ -1445,7 +1445,7 @@ shared_ptr<std::vector<Ciphertext<DCRTPoly>>> SplitIntoSingle(const Ciphertext<D
 			else
 				mask[v] = 0;
 		}
-		Plaintext plaintext = cc->MakeCKKSPackedPlaintext(mask,1);
+		Plaintext plaintext = cc->MakeCKKSPackedPlaintext(mask,1,0,nullptr,m/4);
 		auto cTemp = cc->EvalMult(c,plaintext);
 		for (size_t j = k2; j < NPow2k; j=j*2 ) {
 			cTemp = cc->EvalAdd(cTemp,cc->GetScheme()->EvalAtIndex(cTemp,m/4-j,rotKeys));
@@ -1624,6 +1624,7 @@ Ciphertext<DCRTPoly> HoistedAutomorphism(const EvalKey<DCRTPoly> ek,
 	newCiphertext->SetNoiseScaleDeg(cipherText->GetNoiseScaleDeg());
 	newCiphertext->SetLevel(cipherText->GetLevel());
 	newCiphertext->SetScalingFactor(cipherText->GetScalingFactor());
+	newCiphertext->SetSlots(cipherText->GetSlots());
 
 	return newCiphertext;
 }
