@@ -15,7 +15,7 @@ The repo includes the following files:
 How to Build and Run the Prototypes
 =====================================
 
-1. Install OpenFHE from [OpenFHE Development Repository](https://github.com/openfheorg/openfhe-development). Follow the instructions provided in [README.md](https://github.com/openfheorg/openfhe-genomic-examples/blob/main/README.md).
+1. Install OpenFHE from [OpenFHE Development Repository](https://github.com/openfheorg/openfhe-development). Follow the instructions provided in [https://github.com/openfheorg/openfhe-development/blob/main/README.md](https://github.com/openfheorg/openfhe-genomic-examples/blob/main/README.md).
 
 2. Clone this repository to a local directory and switch to this directory. 
 
