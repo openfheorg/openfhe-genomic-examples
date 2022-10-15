@@ -46,8 +46,6 @@ void CompressEvalKeys(std::map<usint, EvalKey<DCRTPoly>> &ek, size_t level);
 void ReadSNPFile(vector<string>& headers, std::vector<std::vector<double>> & dataColumns,std::vector<std::vector<double>> &x, std::vector<double> &y,
 		string dataFileName, size_t N, size_t M);
 
-shared_ptr<vector<DCRTPoly>> KeySwitchPrecompute(ConstCiphertext<DCRTPoly> cipherText);
-
 Ciphertext<DCRTPoly> HoistedAutomorphism(const EvalKey<DCRTPoly> ek,
 		ConstCiphertext<DCRTPoly> cipherText, const shared_ptr<vector<DCRTPoly>> digits, const usint index);
 
@@ -191,7 +189,7 @@ void RunLogReg(const string &SNPDir, const string &SNPFileName, const string &pV
 	parameters.SetScalingTechnique(FIXEDMANUAL);
 	parameters.SetKeySwitchTechnique(BV);
 	parameters.SetFirstModSize(dcrtBits);
-	parameters.SetBatchSize(batchSize);
+	parameters.SetBatchSize(k);
 	parameters.SetMaxRelinSkDeg(4);
 
 	CryptoContext<DCRTPoly> cc = GenCryptoContext(parameters);
@@ -1059,7 +1057,7 @@ shared_ptr<std::vector<std::vector<Ciphertext<DCRTPoly>>>>  MatrixInverse(const 
 
 	std::vector<Ciphertext<DCRTPoly>> cMRotations(k*k-1);
 
-	auto precomputedcM = KeySwitchPrecompute(cM);
+	auto precomputedcM = cc->EvalFastRotationPrecompute(cM);
 
 #pragma omp parallel for
 	for (size_t i = 1; i < k*k; i++) {
@@ -1581,23 +1579,6 @@ void CompressEvalKeys(std::map<usint, EvalKey<DCRTPoly>> &ek, size_t level) {
 
 }
 
-shared_ptr<vector<DCRTPoly>> KeySwitchPrecompute(ConstCiphertext<DCRTPoly> cipherText)
-{
-
-	Ciphertext<DCRTPoly> newCiphertext = cipherText->CloneEmpty();
-
-	const shared_ptr<CryptoParametersCKKSRNS> cryptoParamsLWE = std::dynamic_pointer_cast<CryptoParametersCKKSRNS>(cipherText->GetCryptoParameters());
-
-	const std::vector<DCRTPoly> &c = cipherText->GetElements();
-
-	uint32_t relinWindow = cryptoParamsLWE->GetDigitSize();
-
-	shared_ptr<std::vector<DCRTPoly>> digitsC2(new std::vector<DCRTPoly>(c[1].CRTDecompose(relinWindow)));
-
-	return digitsC2;
-
-}
-
 Ciphertext<DCRTPoly> HoistedAutomorphism(const EvalKey<DCRTPoly> ek,
 	ConstCiphertext<DCRTPoly> cipherText, const shared_ptr<vector<DCRTPoly>> digits, const usint index)
 {
@@ -1623,10 +1604,7 @@ Ciphertext<DCRTPoly> HoistedAutomorphism(const EvalKey<DCRTPoly> ek,
 
 	std::vector<DCRTPoly> digitsC2(*digits);
 
-	for (size_t i=0; i < digitsC2.size(); i++)
-		digitsC2[i] = digitsC2[i].AutomorphismTransform(index);
-
-	DCRTPoly ct0(c[0].AutomorphismTransform(index));
+	DCRTPoly ct0(c[0]);
 	DCRTPoly ct1;
 
 	ct1 = digitsC2[0] * a[0];
@@ -1637,6 +1615,9 @@ Ciphertext<DCRTPoly> HoistedAutomorphism(const EvalKey<DCRTPoly> ek,
 		ct0 += digitsC2[i] * b[i];
 		ct1 += digitsC2[i] * a[i];
 	}
+
+	ct0 = ct0.AutomorphismTransform(index);
+	ct1 = ct1.AutomorphismTransform(index);
 
 	newCiphertext->SetElements({ ct0, ct1 });
 
