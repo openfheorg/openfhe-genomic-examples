@@ -1,7 +1,7 @@
 Genomic Research Prototypes using Homomorphic Encryption
 =====================================
 
-This gitlab repository includes the implementation of Logistic Regression Approximation (LRA) and Chi-Square GWAS protocols described in
+This github repository includes the implementation of Logistic Regression Approximation (LRA) and Chi-Square GWAS protocols described in
 [Secure large-scale genome-wide association studies using homomorphic encryption](https://www.pnas.org/doi/full/10.1073/pnas.1918257117)
 by Marcelo Blatt, Alexander Gusev, Yuriy Polyakov, and Shafi Goldwasser.
 
