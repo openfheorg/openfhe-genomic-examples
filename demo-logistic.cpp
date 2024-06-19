@@ -58,6 +58,8 @@ double BS(double z) {
 	return sqrt(1-y) * (31*y/200 - 341*y*y/8000) / sqrt(M_PI);
 }
 
+std::vector<uint32_t> GenerateIndices2nComplexCols(usint batchSize, usint m);
+
 int main(int argc, char **argv) {
 
 	int opt;
@@ -208,10 +210,39 @@ void RunLogReg(const string &SNPDir, const string &SNPFileName, const string &pV
 	auto keyPair = cc->KeyGen();
 	cc->EvalMultKeysGen(keyPair.secretKey);
 	cc->EvalSumKeyGen(keyPair.secretKey);
-	auto evalSumRows = cc->EvalSumRowsKeyGen(keyPair.secretKey, nullptr, k);
-	auto evalSumCols = cc->EvalSumColsKeyGen(keyPair.secretKey, nullptr);
-	// EvalSum key is also used for rotations by 1 and 2
 	auto evalSum = cc->GetEvalSumKeyMap(keyPair.secretKey->GetKeyTag());
+	auto evalSumRows = cc->EvalSumRowsKeyGen(keyPair.secretKey, nullptr, k);
+
+	std::vector<uint32_t> indicesCols = GenerateIndices2nComplexCols(k, m);
+	auto evalSumCols = cc->GetScheme()->EvalAutomorphismKeyGen(keyPair.secretKey, indicesCols);
+	//auto evalSumCols = cc->EvalSumColsKeyGen(keyPair.secretKey, nullptr);
+	// EvalSum key is also used for rotations by 1 and 2
+	// auto evalSum = cc->GetEvalSumKeyMap(keyPair.secretKey->GetKeyTag());
+
+
+	std::cerr << "EvalSum" << std::endl;
+	for (auto it = evalSum.begin(); it != evalSum.end(); it++)
+	{
+		std::cout << it->first    // string (key)
+				  << ';'
+				  << std::endl;
+	}
+
+	std::cerr << "EvalSumRows" << std::endl;
+	for (auto it = evalSumRows->begin(); it != evalSumRows->end(); it++)
+	{
+		std::cout << it->first    // string (key)
+				  << ';'
+				  << std::endl;
+	}
+
+	std::cerr << "EvalSumCols" << std::endl;
+	for (auto it = evalSumCols->begin(); it != evalSumCols->end(); it++)
+	{
+		std::cout << it->first    // string (key)
+				  << ';'
+				  << std::endl;
+	}
 
 	auto pubKeyS = PublicKey<DCRTPoly>(new PublicKeyImpl<DCRTPoly>(*keyPair.publicKey));
 	std::vector<DCRTPoly> pubElementsS = pubKeyS->GetPublicElements();
@@ -235,13 +266,29 @@ void RunLogReg(const string &SNPDir, const string &SNPFileName, const string &pV
 
 	auto rotKeysM = cc->GetScheme()->EvalAtIndexKeyGen(nullptr,keyPair.secretKey, indicesM);
 
+	for (auto it = rotKeysM->begin(); it != rotKeysM->end(); it++)
+	{
+		std::cout << it->first    // string (key)
+				  << ';'
+				  << std::endl;
+	}
+
 	std::vector<int32_t> indicesConv;
 	for (size_t i = 4; i < m/4; i=2*i)
 		indicesConv.push_back(m/4-i);
 
+	std::cerr << indicesConv << std::endl;
+
 	cc->SetKeyGenLevel(8);
 
 	auto rotKeysConv = cc->GetScheme()->EvalAtIndexKeyGen(nullptr,keyPair.secretKey, indicesConv);
+
+	for (auto it = rotKeysConv->begin(); it != rotKeysConv->end(); it++)
+	{
+		std::cout << it->first    // string (key)
+				  << ';'
+				  << std::endl;
+	}
 
 	keyGenTime = TOC(t);
 
@@ -531,7 +578,6 @@ void RunLogReg(const string &SNPDir, const string &SNPFileName, const string &pV
 	}
 
 	rotKeysM->clear();
-	evalSumRows->clear();
 
 	//Compute d*z
 	auto cdDen = cc->LevelReduce(cd,nullptr,1); //Level 10
@@ -574,13 +620,17 @@ void RunLogReg(const string &SNPDir, const string &SNPFileName, const string &pV
 		auto cWConv = cc->EvalMult(cWArr[r],plaintextW);
 
 		for (size_t j = NPow2cur*k*k; j < m/4; j=j*2 ) {
-			cWConv = cc->EvalAdd(cWConv,cc->GetScheme()->EvalAtIndex(cWConv,m/4-j,*rotKeysConv));
+			if (m/4-j == 8192)
+				cWConv = cc->EvalAdd(cWConv,cc->GetScheme()->EvalAtIndex(cWConv,m/4-j,*evalSumRows));
+			else
+			    cWConv = cc->EvalAdd(cWConv,cc->GetScheme()->EvalAtIndex(cWConv,m/4-j,*rotKeysConv));
 		}
 
 		cWConvArr[r] = cc->ModReduce(cWConv); //Level 9
 
 	}
 
+	// evalSumRows->clear();
 	CompressEvalKeys(*rotKeysConv,1);
 
 	vector<Ciphertext<DCRTPoly>> cWVector;
@@ -786,7 +836,10 @@ void RunLogReg(const string &SNPDir, const string &SNPFileName, const string &pV
 		auto beta1 = cc->EvalMult(cWConv2,cztrArr[r]);
 
 		for (size_t j = NPow2cur*k*k; j < m/4; j=j*2 ) {
-			beta1 = cc->EvalAdd(beta1,cc->GetScheme()->EvalAtIndex(beta1,m/4-j,*rotKeysConv));
+			if (m/4-j == 8192)
+				beta1 = cc->EvalAdd(beta1,cc->GetScheme()->EvalAtIndex(beta1,m/4-j,*evalSumRows));
+			else
+				beta1 = cc->EvalAdd(beta1,cc->GetScheme()->EvalAtIndex(beta1,m/4-j,*rotKeysConv));;
 		}
 
 		beta1Arr[r] = cc->ModReduce(beta1); //Level 14
@@ -1557,25 +1610,25 @@ void ReadSNPFile(vector<string>& headers, std::vector<std::vector<double>> & dat
 
 void CompressEvalKeys(std::map<usint, EvalKey<DCRTPoly>> &ek, size_t level) {
 
-	std::map<usint, EvalKey<DCRTPoly>>::iterator it;
-
-	for ( it = ek.begin(); it != ek.end(); it++ )
-	{
-
-		std::vector<DCRTPoly> b = it->second->GetBVector();
-		std::vector<DCRTPoly> a = it->second->GetAVector();
-
-		for (size_t k = 0; k < a.size(); k++) {
-			a[k].DropLastElements(level);
-			b[k].DropLastElements(level);
-		}
-
-		it->second->ClearKeys();
-
-		it->second->SetAVector(std::move(a));
-		it->second->SetBVector(std::move(b));
-
-	}
+//	std::map<usint, EvalKey<DCRTPoly>>::iterator it;
+//
+//	for ( it = ek.begin(); it != ek.end(); it++ )
+//	{
+//
+//		std::vector<DCRTPoly> b = it->second->GetBVector();
+//		std::vector<DCRTPoly> a = it->second->GetAVector();
+//
+//		for (size_t k = 0; k < a.size(); k++) {
+//			a[k].DropLastElements(level);
+//			b[k].DropLastElements(level);
+//		}
+//
+//		it->second->ClearKeys();
+//
+//		it->second->SetAVector(std::move(a));
+//		it->second->SetBVector(std::move(b));
+//
+//	}
 
 }
 
@@ -1629,6 +1682,19 @@ Ciphertext<DCRTPoly> HoistedAutomorphism(const EvalKey<DCRTPoly> ek,
 	return newCiphertext;
 }
 
+std::vector<uint32_t> GenerateIndices2nComplexCols(usint batchSize, usint m) {
+    auto isize = static_cast<size_t>(std::ceil(std::log2(batchSize)));
 
+    std::vector<uint32_t> indices;
+    indices.reserve(isize);
+
+    uint32_t g = NativeInteger(5).ModInverse(m).ConvertToInt<uint32_t>();
+    for (size_t i = 0; i < isize; ++i) {
+        indices.push_back(g);
+        g = (g * g) % m;
+    }
+
+    return indices;
+}
 
 
