@@ -125,6 +125,21 @@ int main(int argc, char **argv) {
 
 }
 
+std::vector<uint32_t> GenerateIndices2nComplexCols(uint32_t batchSize, uint32_t m) {
+    auto isize = static_cast<size_t>(std::ceil(std::log2(batchSize)));
+
+    std::vector<uint32_t> indices;
+    indices.reserve(isize);
+
+    uint32_t g = NativeInteger(5).ModInverse(m).ConvertToInt<uint32_t>();
+    for (size_t i = 0; i < isize; ++i) {
+        indices.push_back(g);
+        g = (g * g) % m;
+    }
+
+    return indices;
+}
+
 void RunLogReg(const string &SNPDir, const string &SNPFileName, const string &pValue, const string &Runtime, const string &SampleSize, const string &SNPs) {
 
 	TimeVar t;
@@ -206,12 +221,15 @@ void RunLogReg(const string &SNPDir, const string &SNPFileName, const string &pV
 	TIC(t);
 
 	auto keyPair = cc->KeyGen();
-	cc->EvalMultKeysGen(keyPair.secretKey);
-	cc->EvalSumKeyGen(keyPair.secretKey);
-	auto evalSumRows = cc->EvalSumRowsKeyGen(keyPair.secretKey, nullptr, k);
-	auto evalSumCols = cc->EvalSumColsKeyGen(keyPair.secretKey, nullptr);
-	// EvalSum key is also used for rotations by 1 and 2
-	auto evalSum = cc->GetEvalSumKeyMap(keyPair.secretKey->GetKeyTag());
+    cc->EvalMultKeysGen(keyPair.secretKey);
+	// as we have introduced a new internal EvalAutomorphismKey map in OpenFHE which includes
+	// ALL EvalAutomorphism keys, we had to alter this code to make it work with the new map
+    cc->EvalSumKeyGen(keyPair.secretKey);
+    auto evalSum = cc->GetEvalSumKeyMap(keyPair.secretKey->GetKeyTag());
+    auto evalSumRows = cc->EvalSumRowsKeyGen(keyPair.secretKey, nullptr, k);
+
+    std::vector<uint32_t> indicesCols = GenerateIndices2nComplexCols(k, m);
+    auto evalSumCols = cc->GetScheme()->EvalAutomorphismKeyGen(keyPair.secretKey, indicesCols);
 
 	auto pubKeyS = PublicKey<DCRTPoly>(new PublicKeyImpl<DCRTPoly>(*keyPair.publicKey));
 	std::vector<DCRTPoly> pubElementsS = pubKeyS->GetPublicElements();
