@@ -251,7 +251,7 @@ void RunLogReg(const string &SNPDir, const string &SNPFileName, const string &pV
 
 	cc->SetKeyGenLevel(5);
 
-	auto rotKeysM = cc->GetScheme()->EvalAtIndexKeyGen(nullptr,keyPair.secretKey, indicesM);
+	auto rotKeysM = cc->GetScheme()->EvalAtIndexKeyGen(keyPair.secretKey, indicesM);
 
 	std::vector<int32_t> indicesConv;
 	for (size_t i = 4; i < m/4; i=2*i)
@@ -259,7 +259,7 @@ void RunLogReg(const string &SNPDir, const string &SNPFileName, const string &pV
 
 	cc->SetKeyGenLevel(8);
 
-	auto rotKeysConv = cc->GetScheme()->EvalAtIndexKeyGen(nullptr,keyPair.secretKey, indicesConv);
+	auto rotKeysConv = cc->GetScheme()->EvalAtIndexKeyGen(keyPair.secretKey, indicesConv);
 
 	keyGenTime = TOC(t);
 
