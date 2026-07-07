@@ -1,9 +1,19 @@
 cmake_minimum_required (VERSION 3.5.1)
-  
+
 project(demo CXX)
 set(CMAKE_CXX_STANDARD 17)
 
-find_package(OpenFHE)
+find_package(OpenFHE CONFIG HINTS ${OPENFHE_INSTALL_DIR} REQUIRED)
+if(OpenFHE_FOUND)
+    message(STATUS "FOUND PACKAGE OpenFHE")
+    message(STATUS "OpenFHE Version: ${BASE_OPENFHE_VERSION}")
+    message(STATUS "OpenFHE installed as shared libraries: ${OpenFHE_SHARED}")
+    message(STATUS "OpenFHE include files location: ${OpenFHE_INCLUDE}")
+    message(STATUS "OpenFHE lib files location: ${OpenFHE_LIBDIR}")
+    message(STATUS "OpenFHE Native Backend size: ${OpenFHE_NATIVE_SIZE}")
+else()
+    message(FATAL_ERROR "PACKAGE OpenFHE NOT FOUND")
+endif()
 
 set( CMAKE_CXX_FLAGS ${OpenFHE_CXX_FLAGS} )
 
@@ -28,6 +38,6 @@ endif()
 ### ADD YOUR EXECUTABLE(s) HERE
 ### add_executable( EXECUTABLE-NAME SOURCES )
 ###
-### EXAMPLE: 
+### EXAMPLE:
 add_executable( demo-logistic demo-logistic.cpp )
 add_executable( demo-chi2 demo-chi2.cpp )

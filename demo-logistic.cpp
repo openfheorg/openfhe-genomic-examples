@@ -30,24 +30,24 @@ void RunLogReg(const string &SNPDir, const string &SNPFileName, const string &pV
 Ciphertext<DCRTPoly> zExpand(const Ciphertext<DCRTPoly> p, const Ciphertext<DCRTPoly> y);
 
 shared_ptr<std::vector<std::vector<Ciphertext<DCRTPoly>>>> MatrixInverse(const Ciphertext<DCRTPoly> m, size_t k, CiphertextImpl<DCRTPoly> &b, CiphertextImpl<DCRTPoly> &cd,
-		const std::map<usint, EvalKey<DCRTPoly>> &map, const std::map<usint, EvalKey<DCRTPoly>> &rotKeys,
-		const std::map<usint, EvalKey<DCRTPoly>> &evalSumRows);
+		const std::map<uint32_t, EvalKey<DCRTPoly>> &map, const std::map<uint32_t, EvalKey<DCRTPoly>> &rotKeys,
+		const std::map<uint32_t, EvalKey<DCRTPoly>> &evalSumRows);
 
 Ciphertext<DCRTPoly> CloneCiphertext(const Ciphertext<DCRTPoly> ciphertext, size_t size,
-		const std::map<usint,EvalKey<DCRTPoly>> &rotKeys, const std::map<usint,EvalKey<DCRTPoly>> &evalSumRows);
+		const std::map<uint32_t,EvalKey<DCRTPoly>> &rotKeys, const std::map<uint32_t,EvalKey<DCRTPoly>> &evalSumRows);
 
 shared_ptr<std::vector<Ciphertext<DCRTPoly>>> SplitIntoSingle(const Ciphertext<DCRTPoly> c, size_t N, size_t k,
-		const std::map<usint, EvalKey<DCRTPoly>> &rotKeys);
+		const std::map<uint32_t, EvalKey<DCRTPoly>> &rotKeys);
 
 Ciphertext<DCRTPoly> BinaryTreeAdd(std::vector<Ciphertext<DCRTPoly>> &vector);
 
-void CompressEvalKeys(std::map<usint, EvalKey<DCRTPoly>> &ek, size_t level);
+void CompressEvalKeys(std::map<uint32_t, EvalKey<DCRTPoly>> &ek, size_t level);
 
 void ReadSNPFile(vector<string>& headers, std::vector<std::vector<double>> & dataColumns,std::vector<std::vector<double>> &x, std::vector<double> &y,
 		string dataFileName, size_t N, size_t M);
 
 Ciphertext<DCRTPoly> HoistedAutomorphism(const EvalKey<DCRTPoly> ek,
-		ConstCiphertext<DCRTPoly> cipherText, const shared_ptr<vector<DCRTPoly>> digits, const usint index);
+		ConstCiphertext<DCRTPoly> cipherText, const shared_ptr<vector<DCRTPoly>> digits, const uint32_t index);
 
 double normalCFD(double value) { return 0.5 * erfc(-value * M_SQRT1_2); }
 
@@ -183,18 +183,18 @@ void RunLogReg(const string &SNPDir, const string &SNPFileName, const string &pV
 	M = sData[0].size();
 	size_t k =  xData[0].size();
 
-	usint m;
+	uint32_t m;
 
 	m = 65536;
 
 	size_t n = m/4;
 
-	usint init_size = 17;
-	usint dcrtBits = 50;
+	uint32_t init_size = 17;
+	uint32_t dcrtBits = 50;
 
 	size_t k2 = k*k;
 
-	usint batchSize = k*k;
+	uint32_t batchSize = k*k;
 
 	CCParams<CryptoContextCKKSRNS> parameters;
 
@@ -221,15 +221,34 @@ void RunLogReg(const string &SNPDir, const string &SNPFileName, const string &pV
 	TIC(t);
 
 	auto keyPair = cc->KeyGen();
-    cc->EvalMultKeysGen(keyPair.secretKey);
-	// as we have introduced a new internal EvalAutomorphismKey map in OpenFHE which includes
-	// ALL EvalAutomorphism keys, we had to alter this code to make it work with the new map
-    cc->EvalSumKeyGen(keyPair.secretKey);
-    auto evalSum = cc->GetEvalSumKeyMap(keyPair.secretKey->GetKeyTag());
-    auto evalSumRows = cc->EvalSumRowsKeyGen(keyPair.secretKey, nullptr, k);
+	cc->EvalMultKeysGen(keyPair.secretKey);
 
-    std::vector<uint32_t> indicesCols = GenerateIndices2nComplexCols(k, m);
-    auto evalSumCols = cc->GetScheme()->EvalAutomorphismKeyGen(keyPair.secretKey, indicesCols);
+	std::vector<int32_t> indicesM;
+	for (size_t i = 3; i < k*k; i++) {
+		if (!((i == 4) || (i == 8)))
+			indicesM.push_back(i);
+	}
+
+	cc->SetKeyGenLevel(5);
+
+	auto rotKeysM = cc->GetScheme()->EvalAtIndexKeyGen(keyPair.secretKey, indicesM);
+
+	std::vector<int32_t> indicesConv;
+	for (size_t i = 4; i < m/4; i=2*i)
+		indicesConv.push_back(m/4-i);
+
+	cc->SetKeyGenLevel(8);
+
+	auto rotKeysConv = cc->GetScheme()->EvalAtIndexKeyGen(keyPair.secretKey, indicesConv);
+
+	cc->SetKeyGenLevel(0);
+
+	cc->EvalSumKeyGen(keyPair.secretKey);
+	auto evalSum = cc->GetEvalSumKeyMap(keyPair.secretKey->GetKeyTag());
+	auto evalSumRows = cc->EvalSumRowsKeyGen(keyPair.secretKey, nullptr, k);
+
+	std::vector<uint32_t> indicesCols = GenerateIndices2nComplexCols(k, m);
+	auto evalSumCols = cc->GetScheme()->EvalAutomorphismKeyGen(keyPair.secretKey, indicesCols);
 
 	auto pubKeyS = PublicKey<DCRTPoly>(new PublicKeyImpl<DCRTPoly>(*keyPair.publicKey));
 	std::vector<DCRTPoly> pubElementsS = pubKeyS->GetPublicElements();
@@ -242,24 +261,6 @@ void RunLogReg(const string &SNPDir, const string &SNPFileName, const string &pV
 	for (size_t i=0; i < pubElementsX.size(); i++)
 		pubElementsX[i].DropLastElements(11);
 	pubKeyX->SetPublicElements(pubElementsX);
-
-	std::vector<int32_t> indicesM;
-	for (size_t i = 3; i < k*k; i++) {
-		if (!((i == 4) || (i == 8)))
-			indicesM.push_back(i);
-	}
-
-	cc->SetKeyGenLevel(5);
-
-	auto rotKeysM = cc->GetScheme()->EvalAtIndexKeyGen(nullptr,keyPair.secretKey, indicesM);
-
-	std::vector<int32_t> indicesConv;
-	for (size_t i = 4; i < m/4; i=2*i)
-		indicesConv.push_back(m/4-i);
-
-	cc->SetKeyGenLevel(8);
-
-	auto rotKeysConv = cc->GetScheme()->EvalAtIndexKeyGen(nullptr,keyPair.secretKey, indicesConv);
 
 	keyGenTime = TOC(t);
 
@@ -1051,14 +1052,14 @@ Ciphertext<DCRTPoly> zExpand(const Ciphertext<DCRTPoly> p, const Ciphertext<DCRT
 }
 
 shared_ptr<std::vector<std::vector<Ciphertext<DCRTPoly>>>>  MatrixInverse(const Ciphertext<DCRTPoly> cM, size_t k,
-		CiphertextImpl<DCRTPoly> &B, CiphertextImpl<DCRTPoly> &d, const std::map<usint, EvalKey<DCRTPoly>> &evalSum,
-		const std::map<usint, EvalKey<DCRTPoly>> &rotKeys, const std::map<usint, EvalKey<DCRTPoly>> &evalSumRows) {
+		CiphertextImpl<DCRTPoly> &B, CiphertextImpl<DCRTPoly> &d, const std::map<uint32_t, EvalKey<DCRTPoly>> &evalSum,
+		const std::map<uint32_t, EvalKey<DCRTPoly>> &rotKeys, const std::map<uint32_t, EvalKey<DCRTPoly>> &evalSumRows) {
 
 	auto cc = cM->GetCryptoContext();
 
 	const shared_ptr<CryptoParametersBase<DCRTPoly>> cryptoParams = cM->GetCryptoParameters();
 	const auto elementParams = cryptoParams->GetElementParams();
-	usint m = elementParams->GetCyclotomicOrder();
+	uint32_t m = elementParams->GetCyclotomicOrder();
 
 	size_t kSquare = k*k;
 
@@ -1080,7 +1081,7 @@ shared_ptr<std::vector<std::vector<Ciphertext<DCRTPoly>>>>  MatrixInverse(const 
 #pragma omp parallel for
 	for (size_t i = 1; i < k*k; i++) {
 
-		usint autoIndex = FindAutomorphismIndex2nComplex(i,m);
+		uint32_t autoIndex = FindAutomorphismIndex2nComplex(i,m);
 
 		if (i < 3)
 			cMRotations[i-1] = HoistedAutomorphism(evalSum.find(autoIndex)->second,cM,precomputedcM,autoIndex);
@@ -1423,7 +1424,7 @@ adjoin_4by4_sim_matrix <- function(a){
 }
 
 Ciphertext<DCRTPoly> CloneCiphertext(const Ciphertext<DCRTPoly> ciphertext, size_t size,
-		const std::map<usint,EvalKey<DCRTPoly>> &rotKeys, const std::map<usint,EvalKey<DCRTPoly>> &evalSumRows) {
+		const std::map<uint32_t,EvalKey<DCRTPoly>> &rotKeys, const std::map<uint32_t,EvalKey<DCRTPoly>> &evalSumRows) {
 
 	Ciphertext<DCRTPoly> answer(new CiphertextImpl<DCRTPoly>(*ciphertext));
 	auto cc = ciphertext->GetCryptoContext();
@@ -1440,13 +1441,13 @@ Ciphertext<DCRTPoly> CloneCiphertext(const Ciphertext<DCRTPoly> ciphertext, size
 }
 
 shared_ptr<std::vector<Ciphertext<DCRTPoly>>> SplitIntoSingle(const Ciphertext<DCRTPoly> c, size_t N, size_t k,
-		const std::map<usint, EvalKey<DCRTPoly>> &rotKeys){
+		const std::map<uint32_t, EvalKey<DCRTPoly>> &rotKeys){
 
 	auto cc = c->GetCryptoContext();
 
 	const shared_ptr<CryptoParametersBase<DCRTPoly>> cryptoParams = c->GetCryptoParameters();
 	const auto elementParams = cryptoParams->GetElementParams();
-	usint m = elementParams->GetCyclotomicOrder();
+	uint32_t m = elementParams->GetCyclotomicOrder();
 
 	shared_ptr<std::vector<Ciphertext<DCRTPoly>>> cVector(new std::vector<Ciphertext<DCRTPoly>>(N));
 
@@ -1573,9 +1574,9 @@ void ReadSNPFile(vector<string>& headers, std::vector<std::vector<double>> & dat
 	std::cout << dataFileName << std::endl;
 }
 
-void CompressEvalKeys(std::map<usint, EvalKey<DCRTPoly>> &ek, size_t level) {
+void CompressEvalKeys(std::map<uint32_t, EvalKey<DCRTPoly>> &ek, size_t level) {
 
-	std::map<usint, EvalKey<DCRTPoly>>::iterator it;
+	std::map<uint32_t, EvalKey<DCRTPoly>>::iterator it;
 
 	for ( it = ek.begin(); it != ek.end(); it++ )
 	{
@@ -1598,7 +1599,7 @@ void CompressEvalKeys(std::map<usint, EvalKey<DCRTPoly>> &ek, size_t level) {
 }
 
 Ciphertext<DCRTPoly> HoistedAutomorphism(const EvalKey<DCRTPoly> ek,
-	ConstCiphertext<DCRTPoly> cipherText, const shared_ptr<vector<DCRTPoly>> digits, const usint index)
+	ConstCiphertext<DCRTPoly> cipherText, const shared_ptr<vector<DCRTPoly>> digits, const uint32_t index)
 {
 
 
@@ -1628,7 +1629,7 @@ Ciphertext<DCRTPoly> HoistedAutomorphism(const EvalKey<DCRTPoly> ek,
 	ct1 = digitsC2[0] * a[0];
 	ct0 += digitsC2[0] * b[0];
 
-	for (usint i = 1; i < digitsC2.size(); ++i)
+	for (uint32_t i = 1; i < digitsC2.size(); ++i)
 	{
 		ct0 += digitsC2[i] * b[i];
 		ct1 += digitsC2[i] * a[i];
