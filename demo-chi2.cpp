@@ -146,10 +146,10 @@ void RunChi2(const string &SNPDir,
 
 	ReadSNPFile(headersS,sData,yData,SNPDir + "/" + SNPFileName,N,M);
 
-	usint m = 16384;
+	uint32_t m = 16384;
 
-	usint init_size = 4;
-	usint dcrtBits = 54;
+	uint32_t init_size = 4;
+	uint32_t dcrtBits = 54;
 
 	double scalingFactor = 2.5e-6;
 
@@ -519,7 +519,7 @@ void ReadSNPFile(vector<string>& headers, std::vector<std::vector<double>> & dat
 			for(uint32_t i = 0; i < 5; i++) {
 				string substr;
 				getline(ss, substr, ',');
-				if ((i==1))
+				if (i==1)
 					y.push_back(std::stod(substr));
 			}
 			std::vector<double> row(cols);
